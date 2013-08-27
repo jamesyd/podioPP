@@ -16,6 +16,7 @@
 
 
 var jive = require("jive-sdk");
+var oauth = require('./routes/oauth/sampleOauth');
 
 // need to find some better public domain/hosted icons or figure another solution here ...
 var colorMap = {
@@ -23,6 +24,9 @@ var colorMap = {
     '1':'http://cdn1.iconfinder.com/data/icons/function_icon_set/warning_48.png',
     '0':'http://cdn1.iconfinder.com/data/icons/function_icon_set/circle_red.png'
 }
+
+var refreshToken = "";
+var doRefreshToken = false;
 function doDataPush(instance) {
 
     var ticketID = instance['config']['ticketID'];
@@ -31,6 +35,7 @@ function doDataPush(instance) {
     tokenStore.find('tokens', {'ticket': ticketID }).then(function (found) {
         if (found) {
             var accessToken = found[0]['accessToken']['access_token'];
+            refreshToken = found[0]['accessToken']['refresh_token'];
 
             jive.util.buildRequest(
                     "https://api.podio.com/task/personal/summary?limit=10&oauth_token=" + accessToken,
@@ -121,7 +126,13 @@ function doDataPush(instance) {
 
                 // fail
                 function (response) {
-                    console.log("Failed to query!");
+                    console.log("Failed to query! code=" + response.statusCode  + " (" + response.entity.error_description + ")");
+                    if (response.statusCode == 401)
+                    {
+                        // do a token refresh next time around ...
+                        doRefreshToken = true;
+                    }
+
                 }
             );
         }
@@ -129,7 +140,13 @@ function doDataPush(instance) {
 }
 function processTileInstance(instance) {
     jive.logger.debug('running pusher for ', instance.name, 'instance', instance.id);
-    doDataPush(instance);
+    if (doRefreshToken && refreshToken.length)     {
+        console.log( 'refreshing token in PodioTaskList ...')
+        oauth.refreshToken( refreshToken, instance['config']['ticketID'] );
+        doRefreshToken = false;
+    }
+    else
+         doDataPush(instance);
 }
 
 exports.task = new jive.tasks.build(

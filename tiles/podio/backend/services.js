@@ -1,4 +1,8 @@
 var jive = require("jive-sdk");
+var oauth = require('./routes/oauth/sampleOauth');
+
+var refreshToken = "";
+var doRefreshToken = false;
 
 function doDataPush(instance) {
 
@@ -8,6 +12,7 @@ function doDataPush(instance) {
     tokenStore.find('tokens', {'ticket': ticketID }).then(function (found) {
         if (found) {
             var accessToken = found[0]['accessToken']['access_token'];
+            refreshToken = found[0]['accessToken']['refresh_token'];
 
             jive.util.buildRequest(
                     "https://api.podio.com/contact/?contact_type=user&exclude_self=true&order=name&type=mini&oauth_token=" + accessToken,
@@ -61,6 +66,11 @@ function doDataPush(instance) {
                 // fail
                 function (response) {
                     console.log("Failed to query!");
+                    if (response.statusCode == 401)
+                    {
+                        // do a token refresh next time around ...
+                        doRefreshToken = true;
+                    }
                 }
             );
         }
@@ -68,7 +78,13 @@ function doDataPush(instance) {
 }
 function processTileInstance(instance) {
     jive.logger.debug('running pusher for ', instance.name, 'instance', instance.id);
-    doDataPush(instance);
+    if (doRefreshToken && refreshToken.length)     {
+        console.log( 'refreshing token in podio ...')
+        oauth.refreshToken( refreshToken, instance['config']['ticketID'] );
+        doRefreshToken = false;
+    }
+    else
+        doDataPush(instance);
 }
 
 exports.task = new jive.tasks.build(

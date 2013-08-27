@@ -31,3 +31,20 @@ myOauth.oauth2SuccessCallback = function( state, originServerAccessTokenResponse
 myOauth.getTokenStore = function() {
     return tokenStore;
 };
+
+var oauthUtil = require("jive-sdk/lib/oauthUtil");
+
+myOauth.refreshToken = function( refreshToken, viewerID ) {
+    oauthUtil.refreshTokenFlow( jive.service.options['oauth2'], refreshToken).then( function (response) {
+            //console.log( "RTF: OK")
+            tokenStore.save('tokens', viewerID, {
+                ticket : viewerID,
+                accessToken: response['entity']
+            })
+        },
+        function (error) {
+            //console.log( "RTF: NG")
+        })
+}
+
+

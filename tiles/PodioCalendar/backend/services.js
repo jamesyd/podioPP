@@ -16,7 +16,10 @@
 
 
 var jive = require("jive-sdk");
+var oauth = require('./routes/oauth/sampleOauth');
 
+var refreshToken = "";
+var doRefreshToken = false;
 
 function doDataPush(instance) {
 
@@ -26,9 +29,18 @@ function doDataPush(instance) {
     tokenStore.find('tokens', {'ticket': ticketID }).then(function (found) {
         if (found) {
             var accessToken = found[0]['accessToken']['access_token'];
+            refreshToken = found[0]['accessToken']['refresh_token'];
+
+            var start_date = new Date();
+            start_date.setDate( start_date.getDate());  // current date ...
+
+            var end_date = new Date();
+            end_date.setDate( end_date.getDate() + (6*30) ); // ... and end 6 months out ...
+            var date_from = String(start_date.getFullYear() + '-' + (start_date.getMonth()+1) + '-' + start_date.getDate())  ;
+            var date_to = String(end_date.getFullYear() + '-' + (end_date.getMonth()+1) + '-' + end_date.getDate())  ;
 
             jive.util.buildRequest(
-                    "https://api.podio.com/calendar/?date_from=2013-08-01&date_to=2014-08-26&priority=1&oauth_token=" + accessToken,
+                    "https://api.podio.com/calendar/?date_from="+date_from+"&date_to="+date_to+"&priority=1&oauth_token=" + accessToken,
                     'GET'
                 ).then(
                 // success
@@ -101,6 +113,12 @@ function doDataPush(instance) {
                 // fail
                 function (response) {
                     console.log("Failed to query!");
+                    if (response.statusCode == 401)
+                    {
+                        // do a token refresh next time around ...
+                        doRefreshToken = true;
+                    }
+
                 }
             );
         }
@@ -108,7 +126,14 @@ function doDataPush(instance) {
 }
 function processTileInstance(instance) {
     jive.logger.debug('running pusher for ', instance.name, 'instance', instance.id);
-    doDataPush(instance);
+
+    if (doRefreshToken && refreshToken.length)     {
+        console.log( 'refreshing token in PodioCalendar ...')
+        oauth.refreshToken( refreshToken, instance['config']['ticketID'] );
+        doRefreshToken = false;
+    }
+    else
+        doDataPush(instance);
 }
 
 exports.task = new jive.tasks.build(
